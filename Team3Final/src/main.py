@@ -16,16 +16,20 @@ brain = Brain()
 controller = Controller()
 
 #Instantiating motors
-frontLeft_motor = Motor(Ports.PORT10, 18_1, True)
-frontRight_motor = Motor(Ports.PORT1, 18_1, False)
-backLeft_motor = Motor(Ports.PORT10, 18_1, True)
-backRight_motor = Motor(Ports.PORT10, 18_1, True)
+frontLeft_motor = Motor(Ports.PORT12, 18_1, True)
+frontRight_motor = Motor(Ports.PORT13, 18_1, False)
+backLeft_motor = Motor(Ports.PORT11, 18_1, True)
+backRight_motor = Motor(Ports.PORT20, 18_1, False)
 
 while True:
     frontLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
     frontRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
     backLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
     backRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
+    frontLeft_motor.spin(FORWARD)
+    frontRight_motor.spin(FORWARD)
+    backLeft_motor.spin(FORWARD)
+    backRight_motor.spin(FORWARD)
 
 
 
