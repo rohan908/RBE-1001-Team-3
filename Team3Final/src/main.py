@@ -21,13 +21,18 @@ gyro.calibrate()
 
 rangeFinder = Sonar(brain.three_wire_port.g)
 
+SIG_RED_BALL = Signature(1, 8945, 11595, 10270, -1391, -471, -930, 2.500, 0)
+SIG_BLUE_BALL = Signature(2, -2259, -1025, -1642, 4097, 9345, 6722, 3.000, 0)
+indexer_camera = Vision(Ports.PORT13, 50, SIG_RED_BALL)
+
+
 #Instantiating motors
-frontLeft_motor = Motor(Ports.PORT11, 18_1, True)
-frontRight_motor = Motor(Ports.PORT20, 18_1, False)
-backLeft_motor = Motor(Ports.PORT12, 18_1, True)
-backRight_motor = Motor(Ports.PORT19, 18_1, False)
-intake_motor = Motor(Ports.PORT10, 18_1, True)
-indexer_motor = Motor(Ports.PORT1, 18_1, True)
+frontLeft_motor = Motor(Ports.PORT20, 18_1, True)
+frontRight_motor = Motor(Ports.PORT11, 18_1, False)
+backLeft_motor = Motor(Ports.PORT10, 18_1, True)
+backRight_motor = Motor(Ports.PORT2, 18_1, False)
+intake_motor = Motor(Ports.PORT12, 18_1, True)
+indexer_motor = Motor(Ports.PORT19, 18_1, True)
 
 # def auton_5ballcollect():
 #     #turn on intake
@@ -43,7 +48,14 @@ indexer_motor = Motor(Ports.PORT1, 18_1, True)
 #         #wait
 #             #wait for 2 seconds
 
-
+def DetectObject():
+    objects = indexer_camera.take_snapshot(SIG_RED_BALL)
+    if (objects):
+        print(" x: ", indexer_camera.largest_object().centerX, "y: ", indexer_camera.largest_object().centerY, "width", indexer_camera.largest_object().width)
+        return True
+    else:
+        return False
+    
 while True:
     frontLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
     frontRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
@@ -53,16 +65,39 @@ while True:
     frontRight_motor.spin(FORWARD)
     backLeft_motor.spin(FORWARD)
     backRight_motor.spin(FORWARD)
+
+    #Indexer Pseudocode
+    #If the robot detects a ball, move indexer by x amount, stops otherwise.
+    red_objects = indexer_camera.take_snapshot(SIG_RED_BALL)
+    blue_objects = indexer_camera.take_snapshot(SIG_BLUE_BALL)
+
+    if(DetectObject()):
+         print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width)
+         wait(200)
+         indexer_motor.spin_for(FORWARD, 100, DEGREES)
+    else:
+        indexer_motor.spin(FORWARD, 0, RPM)
+
+    # if (red_objects or blue_objects):
+    #     if(indexer_camera.largest_object().height * indexer_camera.largest_object().width > 100):
+    #         print("here")
+    #         print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width) #If the robot detects a ball):
+    #         brain.screen.print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width)
+    #         indexer_motor.spin_for(FORWARD, 150, DEGREES)
+    #     else: 
+    #         indexer_motor.spin(FORWARD, 0, RPM)
+    # else:
+    #     indexer_motor.spin(FORWARD, 0, RPM)
     
     if controller.buttonL2.pressing():
         intake_motor.spin(FORWARD, 200, RPM)
-        indexer_motor.spin(REVERSE, 200, RPM)
+        #indexer_motor.spin(REVERSE, 200, RPM)
     elif controller.buttonL1.pressing():
         intake_motor.spin(REVERSE, 200, RPM)
-        indexer_motor.spin(FORWARD, 200, RPM)
+        #indexer_motor.spin(FORWARD, 200, RPM)
     elif controller.buttonB.pressing():
         intake_motor.spin(FORWARD, 0, RPM)
-        indexer_motor.spin(FORWARD, 0, RPM)
+        #indexer_motor.spin(FORWARD, 0, RPM)
     # if controller.buttonR1.pressing():
     #     indexer_motor.spin(FORWARD, 200, RPM)
     # elif controller.buttonR2.pressing():
