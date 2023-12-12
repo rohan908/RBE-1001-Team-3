@@ -56,22 +56,22 @@ def getHeadingError(targetHeading):
         headingError = 360 + headingError
     return headingError
 
-def driveWGyro(wantedHeading, driveSpeed, distInch = 0):
+def driveWGyro(wantedHeading, driveSpeed):
     direction = -K_P_DRIVE*getHeadingError(wantedHeading)
-    if (distInch == 0): #drive w/o input distance
-        frontLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
-        backLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
-        frontRight_motor.set_velocity(driveSpeed + direction, RPM)
-        backRight_motor.set_velocity(driveSpeed + direction, RPM)
-        frontLeft_motor.spin(FORWARD)
-        backLeft_motor.spin(FORWARD)
-        frontRight_motor.spin(FORWARD)
-        backRight_motor.spin(FORWARD)
-    else: #drive w/ input distance (ultrasconic PID)
-        frontLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)   #direction is a K_P modified value
-        backLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)   #direction is a K_P modified value
-        frontRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
-        backRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
+    frontLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
+    backLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
+    frontRight_motor.set_velocity(driveSpeed + direction, RPM)
+    backRight_motor.set_velocity(driveSpeed + direction, RPM)
+    frontLeft_motor.spin(FORWARD)
+    backLeft_motor.spin(FORWARD)
+    frontRight_motor.spin(FORWARD)
+    backRight_motor.spin(FORWARD)
+
+def deadReckonDrive(distInch, speed):
+        frontLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)   #direction is a K_P modified value
+        backLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)   #direction is a K_P modified value
+        frontRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)
+        backRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)
 
 def teleopDrive():
     frontLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
@@ -82,6 +82,14 @@ def teleopDrive():
     frontRight_motor.spin(FORWARD)
     backLeft_motor.spin(FORWARD)
     backRight_motor.spin(FORWARD)
+
+def driveWSonic(distIn, speed):
+    sonicIntial = sonic.distance(INCHES)
+    initialHeading = gyro.heading()
+    while(abs(sonic.distance(INCHES) - sonicIntial) < distIn):
+        driveWGyro(initialHeading, speed)
+
+
         
 # def auton_3ballcollect():
 #     #turn on intake
