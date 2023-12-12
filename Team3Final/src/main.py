@@ -123,7 +123,6 @@ def turnToHeading(desiredHeading, direction):
     #direction is 1 for clockwise rotation
     #direction is -1 for ccw
     #turning to the right is positive degrees for robotTurnInDegrees!
-    print("turn")
     headingError = getHeadingError(desiredHeading)
     while (abs(headingError) > 0.3): #while the error is greater than 0.3 degrees then continue to correct using proportional correction
         headingError = getHeadingError(desiredHeading) #if the robot is turned to the right of the desired heading, -K_P returns a negative value
@@ -131,6 +130,13 @@ def turnToHeading(desiredHeading, direction):
         rightSideDrive(-1 * SET_TURN_SPEED * K_P_TURN * headingError * direction)
     driveStop()
     #stops to reset velocity values 
+
+def turnDegrees(robotTurnInDegrees, direction):
+    #turns the robot some amount of degrees
+    #direction is 1 for clockwise rotation
+    #direction is -1 for ccw
+    desiredHeading = robotTurnInDegrees + gyro.heading() #wanted new heading
+    turnToHeading(desiredHeading, direction)
 
 def alignWLine():  #for climbing the ramp, aligns us with the white line, late in teleop gyro heading might have siginifcant error so its good to use the line following
     print(leftLineSensor.value()) # getting an initial reading
