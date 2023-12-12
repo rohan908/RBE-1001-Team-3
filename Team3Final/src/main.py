@@ -30,7 +30,6 @@ gyro.calibrate()
 
 sonic = Sonar(brain.three_wire_port.a)
 
-rangeFinder = Sonar(brain.three_wire_port.g)
 
 SIG_RED_BALL = Signature(1, 8945, 11595, 10270, -1391, -471, -930, 2.500, 0)
 SIG_BLUE_BALL = Signature(2, -2259, -1025, -1642, 4097, 9345, 6722, 3.000, 0)
@@ -74,6 +73,15 @@ def driveWGyro(wantedHeading, driveSpeed, distInch = 0):
         frontRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
         backRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
 
+def teleopDrive():
+    frontLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
+    frontRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
+    backLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
+    backRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
+    frontLeft_motor.spin(FORWARD)
+    frontRight_motor.spin(FORWARD)
+    backLeft_motor.spin(FORWARD)
+    backRight_motor.spin(FORWARD)
         
 # def auton_3ballcollect():
 #     #turn on intake
@@ -98,14 +106,6 @@ def DetectObject():
     return False
     
 while True:
-    frontLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
-    frontRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
-    backLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
-    backRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
-    frontLeft_motor.spin(FORWARD)
-    frontRight_motor.spin(FORWARD)
-    backLeft_motor.spin(FORWARD)
-    backRight_motor.spin(FORWARD)
     brain.screen.print_at(shooter_motor.velocity(RPM), x=100, y=200)
     #Indexer Pseudocode
     #If the robot detects a ball, move indexer by x amount, stops otherwise.
