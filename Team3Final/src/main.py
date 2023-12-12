@@ -11,6 +11,15 @@
 from vex import *
 from math import *
 
+#Default Values
+WHEEL_DIAMETER = 4.0
+DRIVE_SPEED_RATIO = 0.6
+WHEEL_TRACK = 12.0 
+
+K_P_DRIVE = 2.5
+K_P_TURN = .1
+PI = 3.14159      
+
 #Instantiating Devices
 brain = Brain()
 controller = Controller()
@@ -18,6 +27,8 @@ controller = Controller()
 gyro = Inertial(Ports.PORT6)
 gyro.reset_heading()
 gyro.calibrate()
+
+sonic = Sonar(brain.three_wire_port.a)
 
 rangeFinder = Sonar(brain.three_wire_port.g)
 
@@ -36,19 +47,47 @@ indexer_motor = Motor(Ports.PORT19, 18_1, True)
 shooter_motor = Motor(Ports.PORT18, 18_1, True)
 hood_motor = Motor(Ports.PORT17, 18_1, True)
 
-# def auton_5ballcollect():
+def getHeadingError(targetHeading):
+    headingError = targetHeading - gyro.heading()
+    #say the heading is 359 degrees and we want to go to 0 degrees, the real difference is 1 degree, but a subtraction results in -359 degrees
+    # subtracting that/adding to 360 gives us the true error and corrects for the 360 degree to 0 degree jump
+    if (headingError > 180):
+        headingError = 360 - headingError
+    elif (headingError < -180):
+        headingError = 360 + headingError
+    return headingError
+
+def driveWGyro(wantedHeading, driveSpeed, distInch = 0):
+    direction = -K_P_DRIVE*getHeadingError(wantedHeading)
+    if (distInch == 0): #drive w/o input distance
+        frontLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
+        backLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
+        frontRight_motor.set_velocity(driveSpeed + direction, RPM)
+        backRight_motor.set_velocity(driveSpeed + direction, RPM)
+        frontLeft_motor.spin(FORWARD)
+        backLeft_motor.spin(FORWARD)
+        frontRight_motor.spin(FORWARD)
+        backRight_motor.spin(FORWARD)
+    else: #drive w/ input distance (ultrasconic PID)
+        frontLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)   #direction is a K_P modified value
+        backLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)   #direction is a K_P modified value
+        frontRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
+        backRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
+
+        
+# def auton_3ballcollect():
 #     #turn on intake
 #     for i in range(5):
 #         while rangeFinder.distance(DistanceUnits.IN):
             
 #         #move fowards to collect the ball
-#             #while robot is < x inches from the back wall
-#                 #move forward at the current heading
-#         #back up
-#             #while robot is > x inches from the back wall
-#                 #move backwards at the current heading
-#         #wait
-#             #wait for 2 seconds
+            #while robot is < x inches from the back wall
+                #move forward at the current heading
+        #back up
+            #while robot is > x inches from the back wall
+                #move backwards at the current heading
+        #wait
+            #wait for 2 seconds
 
 def DetectObject():
     objects = indexer_camera.take_snapshot(SIG_RED_BALL)
