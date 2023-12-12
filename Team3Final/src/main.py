@@ -33,6 +33,8 @@ backLeft_motor = Motor(Ports.PORT10, 18_1, True)
 backRight_motor = Motor(Ports.PORT2, 18_1, False)
 intake_motor = Motor(Ports.PORT12, 18_1, True)
 indexer_motor = Motor(Ports.PORT19, 18_1, True)
+shooter_motor = Motor(Ports.PORT18, 18_1, True)
+hood_motor = Motor(Ports.PORT17, 18_1, True)
 
 # def auton_5ballcollect():
 #     #turn on intake
@@ -65,18 +67,18 @@ while True:
     frontRight_motor.spin(FORWARD)
     backLeft_motor.spin(FORWARD)
     backRight_motor.spin(FORWARD)
-
+    brain.screen.print_at(shooter_motor.velocity(RPM), x=100, y=200)
     #Indexer Pseudocode
     #If the robot detects a ball, move indexer by x amount, stops otherwise.
-    red_objects = indexer_camera.take_snapshot(SIG_RED_BALL)
-    blue_objects = indexer_camera.take_snapshot(SIG_BLUE_BALL)
+    # red_objects = indexer_camera.take_snapshot(SIG_RED_BALL)
+    # blue_objects = indexer_camera.take_snapshot(SIG_BLUE_BALL)
 
-    if(DetectObject()):
-         print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width)
-         wait(200)
-         indexer_motor.spin_for(FORWARD, 100, DEGREES)
-    else:
-        indexer_motor.spin(FORWARD, 0, RPM)
+    # if(DetectObject()):
+    #      print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width)
+    #      wait(200)
+    #      indexer_motor.spin_for(FORWARD, 100, DEGREES)
+    # else:
+    #     indexer_motor.spin(FORWARD, 0, RPM)
 
     # if (red_objects or blue_objects):
     #     if(indexer_camera.largest_object().height * indexer_camera.largest_object().width > 100):
@@ -91,19 +93,23 @@ while True:
     
     if controller.buttonL2.pressing():
         intake_motor.spin(FORWARD, 200, RPM)
-        #indexer_motor.spin(REVERSE, 200, RPM)
+        indexer_motor.spin(REVERSE, 50, RPM)
     elif controller.buttonL1.pressing():
         intake_motor.spin(REVERSE, 200, RPM)
-        #indexer_motor.spin(FORWARD, 200, RPM)
+        indexer_motor.spin(FORWARD, 200, RPM)
+    if controller.buttonA.pressing():
+        shooter_motor.spin(FORWARD, 200, RPM)
     elif controller.buttonB.pressing():
         intake_motor.spin(FORWARD, 0, RPM)
-        #indexer_motor.spin(FORWARD, 0, RPM)
-    # if controller.buttonR1.pressing():
-    #     indexer_motor.spin(FORWARD, 200, RPM)
-    # elif controller.buttonR2.pressing():
-    #     indexer_motor.spin(REVERSE, 200, RPM)
-    # elif controller.buttonY.pressing():
-    #     indexer_motor.spin(FORWARD, 0, RPM)
+        indexer_motor.spin(FORWARD, 0, RPM)
+        shooter_motor.spin(FORWARD, 0, RPM)
+    if controller.buttonX.pressing():
+        hood_motor.spin(FORWARD, 0, RPM)
+
+    if controller.buttonR1.pressing():
+        hood_motor.spin(FORWARD, 10, RPM)
+    elif controller.buttonR2.pressing():
+        hood_motor.spin(REVERSE, 10, RPM)
         
 
 
