@@ -54,9 +54,9 @@ def DetectObject():
     objects = indexer_camera.take_snapshot(SIG_RED_BALL)
     if (objects):
         print(" x: ", indexer_camera.largest_object().centerX, "y: ", indexer_camera.largest_object().centerY, "width", indexer_camera.largest_object().width)
-        return True
-    else:
-        return False
+        if (indexer_camera.largest_object().centerX < 250):
+            return True
+    return False
     
 while True:
     frontLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
@@ -76,7 +76,7 @@ while True:
     # if(DetectObject()):
     #      print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width)
     #      wait(200)
-    #      indexer_motor.spin_for(FORWARD, 100, DEGREES)
+    #      indexer_motor.spin_for(FORWARD, 150, DEGREES)
     # else:
     #     indexer_motor.spin(FORWARD, 0, RPM)
 
@@ -96,7 +96,7 @@ while True:
         indexer_motor.spin(REVERSE, 50, RPM)
     elif controller.buttonL1.pressing():
         intake_motor.spin(REVERSE, 200, RPM)
-        indexer_motor.spin(FORWARD, 200, RPM)
+        #indexer_motor.spin(FORWARD, 200, RPM)
     if controller.buttonA.pressing():
         shooter_motor.spin(FORWARD, 200, RPM)
     elif controller.buttonB.pressing():
@@ -105,7 +105,8 @@ while True:
         shooter_motor.spin(FORWARD, 0, RPM)
     if controller.buttonX.pressing():
         hood_motor.spin(FORWARD, 0, RPM)
-
+    if controller.buttonY.pressing():
+        indexer_motor.spin_for(FORWARD, 165, DEGREES)
     if controller.buttonR1.pressing():
         hood_motor.spin(FORWARD, 10, RPM)
     elif controller.buttonR2.pressing():
