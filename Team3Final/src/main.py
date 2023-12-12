@@ -20,6 +20,23 @@ K_P_DRIVE = 2.5
 K_P_TURN = .1
 PI = 3.14159      
 
+#states
+ROBOT_STOP = 0
+ROBOT_TURN_TO_COLLECT = 1
+ROBOT_COLLECT = 2
+ROBOT_MOVE_TO_GOAL = 3
+ROBOT_ALIGN = 4
+
+SHOOTER_STOP = 0
+SHOOTER_RUN = 1
+
+shooter_state = SHOOTER_STOP
+robot_state = ROBOT_STOP
+
+next_shooter_state = SHOOTER_STOP
+next_robot_state = ROBOT_STOP
+not_E_stopped = True
+
 #Instantiating Devices
 brain = Brain()
 controller = Controller()
@@ -30,6 +47,7 @@ gyro.calibrate()
 
 sonic = Sonar(brain.three_wire_port.a)
 
+rangeFinder = Sonar(brain.three_wire_port.g)
 
 SIG_RED_BALL = Signature(1, 8945, 11595, 10270, -1391, -471, -930, 2.500, 0)
 SIG_BLUE_BALL = Signature(2, -2259, -1025, -1642, 4097, 9345, 6722, 3.000, 0)
@@ -56,39 +74,22 @@ def getHeadingError(targetHeading):
         headingError = 360 + headingError
     return headingError
 
-def driveWGyro(wantedHeading, driveSpeed):
+def driveWGyro(wantedHeading, driveSpeed, distInch = 0):
     direction = -K_P_DRIVE*getHeadingError(wantedHeading)
-    frontLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
-    backLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
-    frontRight_motor.set_velocity(driveSpeed + direction, RPM)
-    backRight_motor.set_velocity(driveSpeed + direction, RPM)
-    frontLeft_motor.spin(FORWARD)
-    backLeft_motor.spin(FORWARD)
-    frontRight_motor.spin(FORWARD)
-    backRight_motor.spin(FORWARD)
-
-def deadReckonDrive(distInch, speed):
-        frontLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)   #direction is a K_P modified value
-        backLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)   #direction is a K_P modified value
-        frontRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)
-        backRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)
-
-def teleopDrive():
-    frontLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
-    frontRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
-    backLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
-    backRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
-    frontLeft_motor.spin(FORWARD)
-    frontRight_motor.spin(FORWARD)
-    backLeft_motor.spin(FORWARD)
-    backRight_motor.spin(FORWARD)
-
-def driveWSonic(distIn, speed):
-    sonicIntial = sonic.distance(INCHES)
-    initialHeading = gyro.heading()
-    while(abs(sonic.distance(INCHES) - sonicIntial) < distIn):
-        driveWGyro(initialHeading, speed)
-
+    if (distInch == 0): #drive w/o input distance
+        frontLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
+        backLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
+        frontRight_motor.set_velocity(driveSpeed + direction, RPM)
+        backRight_motor.set_velocity(driveSpeed + direction, RPM)
+        frontLeft_motor.spin(FORWARD)
+        backLeft_motor.spin(FORWARD)
+        frontRight_motor.spin(FORWARD)
+        backRight_motor.spin(FORWARD)
+    else: #drive w/ input distance (ultrasconic PID)
+        frontLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)   #direction is a K_P modified value
+        backLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)   #direction is a K_P modified value
+        frontRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
+        backRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
 
         
 # def auton_3ballcollect():
@@ -114,6 +115,73 @@ def DetectObject():
     return False
     
 while True:
+    frontLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
+    frontRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
+    backLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
+    backRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
+    frontLeft_motor.spin(FORWARD)
+    frontRight_motor.spin(FORWARD)
+    backLeft_motor.spin(FORWARD)
+    backRight_motor.spin(FORWARD)
+
+# Check for E-Stop
+    if(controller.buttonDown.pressing() and not_E_stopped):
+        not_E_stopped = False
+        next_shooter_state = shooter_state
+        next_robot_state = robot_state
+        shooter_state = SHOOTER_STOP
+        robot_state = ROBOT_STOP
+        print('Emergency Stop')
+        brain.screen.clear_screen()
+        brain.screen.print_at('Emergency Stop', x = 50, y = 50)
+
+    if(controller.buttonUp.pressing()):
+        shooter_state = next_shooter_state
+        robot_state = next_robot_state
+        not_E_stopped = True
+        print('Proceed')
+        brain.screen.clear_screen()
+        brain.screen.print_at('Proceed' , x = 50, y = 50)
+
+#Shooter State Machine
+    if(shooter_state == SHOOTER_STOP):
+        indexer_motor.stop(BRAKE)
+        shooter_motor.stop(COAST)
+        print("Shooter Stopped")
+
+    if(shooter_state == SHOOTER_RUN):
+        shooter_motor.spin(FORWARD, 200, RPM)
+        for i in range(6):
+            indexer_motor.spin_for(FORWARD, 165, DEGREES)
+            while(shooter_motor.velocity() < 175 ):
+                wait(20)
+        shooter_state = SHOOTER_STOP
+
+#Robot State Machine
+    if(robot_state == ROBOT_STOP):
+        frontLeft_motor.stop(BRAKE)
+        frontRight_motor.stop(BRAKE)
+        backLeft_motor.stop(BRAKE)
+        backRight_motor.stop(BRAKE)
+
+    if(robot_state == ROBOT_TURN_TO_COLLECT):
+        #code for turning towards the collection zone
+        robot_state = ROBOT_COLLECT
+
+    if(robot_state == ROBOT_COLLECT):
+        #code for collecting 5 balls
+        robot_state = ROBOT_MOVE_TO_GOAL
+
+    if(robot_state == ROBOT_MOVE_TO_GOAL):
+        #code for moving towards the blue target
+        robot_state = ROBOT_ALIGN
+
+    if(robot_state == ROBOT_ALIGN):
+        #code for aligning the robot with the blue target
+        robot_state = ROBOT_STOP
+        shooter_state = SHOOTER_RUN
+
+
     brain.screen.print_at(shooter_motor.velocity(RPM), x=100, y=200)
     #Indexer Pseudocode
     #If the robot detects a ball, move indexer by x amount, stops otherwise.
