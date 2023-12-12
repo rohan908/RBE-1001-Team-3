@@ -31,10 +31,10 @@ SHOOTER_STOP = 0
 SHOOTER_RUN = 1
 
 shooter_state = SHOOTER_STOP
-robot_state = ROBOT_STOP
+robot_state = ROBOT_TURN_TO_COLLECT
 
 next_shooter_state = SHOOTER_STOP
-next_robot_state = ROBOT_STOP
+next_robot_state = ROBOT_TURN_TO_COLLECT
 not_E_stopped = True
 
 #Instantiating Devices
@@ -55,7 +55,8 @@ SIG_RED_BALL = Signature(1, 8945, 11595, 10270, -1391, -471, -930, 2.500, 0)
 SIG_BLUE_BALL = Signature(2, -2259, -1025, -1642, 4097, 9345, 6722, 3.000, 0)
 indexer_camera = Vision(Ports.PORT13, 50, SIG_RED_BALL)
 
-
+SET_TURN_SPEED = 0
+RAMP_SPEED = 0
 #Instantiating motors
 frontLeft_motor = Motor(Ports.PORT20, 18_1, True)
 frontRight_motor = Motor(Ports.PORT11, 18_1, False)
@@ -115,6 +116,8 @@ def teleopDrive():
 
 def driveWSonic(distIn, speed):
     sonicIntial = sonic.distance(INCHES)
+    print("here")
+    print(sonic.distance(INCHES))
     initialHeading = gyro.heading()
     while(abs(sonic.distance(INCHES) - sonicIntial) < distIn):
         driveWGyro(initialHeading, speed)
@@ -188,7 +191,7 @@ def DetectObject():
     return False
     
 while True:
-    teleopDrive()
+    print(robot_state)
 
 # Check for E-Stop
     if(controller.buttonDown.pressing() and not_E_stopped):
@@ -213,7 +216,7 @@ while True:
     if(shooter_state == SHOOTER_STOP):
         indexer_motor.stop(BRAKE)
         shooter_motor.stop(COAST)
-        print("Shooter Stopped")
+        #print("Shooter Stopped")
 
     if(shooter_state == SHOOTER_RUN):
         shooter_motor.spin(FORWARD, 200, RPM)
@@ -231,21 +234,24 @@ while True:
         backRight_motor.stop(BRAKE)
 
     if(robot_state == ROBOT_TURN_TO_COLLECT):
-        #code for turning towards the collection zone
+        currHeading = gyro.heading()
+        while(True):
+            driveWGyro(currHeading, 100)
+        # turnDegrees(90, -1)
         robot_state = ROBOT_COLLECT
 
-    if(robot_state == ROBOT_COLLECT):
-        #code for collecting 5 balls
-        robot_state = ROBOT_MOVE_TO_GOAL
+    # if(robot_state == ROBOT_COLLECT):
+    #     #code for collecting 5 balls
+    #     robot_state = ROBOT_MOVE_TO_GOAL
 
-    if(robot_state == ROBOT_MOVE_TO_GOAL):
-        #code for moving towards the blue target
-        robot_state = ROBOT_ALIGN
+    # if(robot_state == ROBOT_MOVE_TO_GOAL):
+    #     #code for moving towards the blue target
+    #     robot_state = ROBOT_ALIGN
 
-    if(robot_state == ROBOT_ALIGN):
-        #code for aligning the robot with the blue target
-        robot_state = ROBOT_STOP
-        shooter_state = SHOOTER_RUN
+    # if(robot_state == ROBOT_ALIGN):
+    #     #code for aligning the robot with the blue target
+    #     robot_state = ROBOT_STOP
+    #     shooter_state = SHOOTER_RUN
 
 
     brain.screen.print_at(shooter_motor.velocity(RPM), x=100, y=200)
