@@ -67,7 +67,7 @@ shooter_motor = Motor(Ports.PORT18, 18_1, True)
 hood_motor = Motor(Ports.PORT17, 18_1, True)
 
 def getHeadingError(targetHeading):
-    headingError = targetHeading - gyro.heading()
+    headingError = gyro.heading() - targetHeading
     #say the heading is 359 degrees and we want to go to 0 degrees, the real difference is 1 degree, but a subtraction results in -359 degrees
     # subtracting that/adding to 360 gives us the true error and corrects for the 360 degree to 0 degree jump
     if (headingError > 180):
@@ -76,13 +76,13 @@ def getHeadingError(targetHeading):
         headingError = 360 + headingError
     return headingError
 
-def leftSideDrive(speedInRPM):
+def leftSideDrive(speedInRPM): #combines the two left side motors into one drive function
     frontLeft_motor.set_velocity(speedInRPM, RPM)
     backLeft_motor.set_velocity(speedInRPM, RPM)
     frontLeft_motor.spin(FORWARD)
     backLeft_motor.spin(FORWARD)
     
-def rightSideDrive(speedInRPM):
+def rightSideDrive(speedInRPM):#combines the two right side motors into one drive function
     frontRight_motor.set_velocity(speedInRPM, RPM)
     backRight_motor.set_velocity(speedInRPM, RPM)
     frontRight_motor.spin(FORWARD)
