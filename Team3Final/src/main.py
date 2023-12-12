@@ -47,7 +47,9 @@ gyro.calibrate()
 
 sonic = Sonar(brain.three_wire_port.a)
 
-rangeFinder = Sonar(brain.three_wire_port.g)
+leftLineSensor = Line(brain.three_wire_port.b)
+rightLineSensor = Line(brain.three_wire_port.c)
+farLineSensor = Line(brain.three_wire_port.d)
 
 SIG_RED_BALL = Signature(1, 8945, 11595, 10270, -1391, -471, -930, 2.500, 0)
 SIG_BLUE_BALL = Signature(2, -2259, -1025, -1642, 4097, 9345, 6722, 3.000, 0)
@@ -74,22 +76,87 @@ def getHeadingError(targetHeading):
         headingError = 360 + headingError
     return headingError
 
-def driveWGyro(wantedHeading, driveSpeed, distInch = 0):
+def leftSideDrive(speedInRPM):
+    frontLeft_motor.set_velocity(speedInRPM, RPM)
+    backLeft_motor.set_velocity(speedInRPM, RPM)
+    frontLeft_motor.spin(FORWARD)
+    backLeft_motor.spin(FORWARD)
+    
+def rightSideDrive(speedInRPM):
+    frontRight_motor.set_velocity(speedInRPM, RPM)
+    backRight_motor.set_velocity(speedInRPM, RPM)
+    frontRight_motor.spin(FORWARD)
+    backRight_motor.spin(FORWARD)
+
+def driveStop():
+    leftSideDrive(0)
+    rightSideDrive(0)
+
+def breakTopRamp():
+    frontLeft_motor.stop(HOLD)
+    frontRight_motor.stop(HOLD)
+    backLeft_motor.stop(HOLD)
+    backRight_motor.stop(HOLD)
+
+def driveWGyro(wantedHeading, driveSpeed):
     direction = -K_P_DRIVE*getHeadingError(wantedHeading)
-    if (distInch == 0): #drive w/o input distance
-        frontLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
-        backLeft_motor.set_velocity(driveSpeed - direction, RPM)   #direction is a K_P modified value
-        frontRight_motor.set_velocity(driveSpeed + direction, RPM)
-        backRight_motor.set_velocity(driveSpeed + direction, RPM)
-        frontLeft_motor.spin(FORWARD)
-        backLeft_motor.spin(FORWARD)
-        frontRight_motor.spin(FORWARD)
-        backRight_motor.spin(FORWARD)
-    else: #drive w/ input distance (ultrasconic PID)
-        frontLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)   #direction is a K_P modified value
-        backLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)   #direction is a K_P modified value
-        frontRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
-        backRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS)
+    leftSideDrive(driveSpeed - direction) #direction is a K_P modified value
+    rightSideDrive(driveSpeed + direction)
+
+def deadReckonDrive(distInch, speed):
+        frontLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)   #direction is a K_P modified value
+        backLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)   #direction is a K_P modified value
+        frontRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)
+        backRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)
+
+def teleopDrive():
+    leftSideDrive(2* (controller.axis3.position()+controller.axis1.position())) #direction is a K_P modified value
+    rightSideDrive(2* (controller.axis3.position()-controller.axis1.position()))
+
+def driveWSonic(distIn, speed):
+    sonicIntial = sonic.distance(INCHES)
+    initialHeading = gyro.heading()
+    while(abs(sonic.distance(INCHES) - sonicIntial) < distIn):
+        driveWGyro(initialHeading, speed)
+
+def turnToHeading(desiredHeading, direction):
+    #direction is 1 for clockwise rotation
+    #direction is -1 for ccw
+    #turning to the right is positive degrees for robotTurnInDegrees!
+    print("turn")
+    headingError = getHeadingError(desiredHeading)
+    while (abs(headingError) > 0.3): #while the error is greater than 0.3 degrees then continue to correct using proportional correction
+        headingError = getHeadingError(desiredHeading) #if the robot is turned to the right of the desired heading, -K_P returns a negative value
+        leftSideDrive(SET_TURN_SPEED * K_P_TURN * headingError * direction)
+        rightSideDrive(-1 * SET_TURN_SPEED * K_P_TURN * headingError * direction)
+    driveStop()
+    #stops to reset velocity values 
+
+def alignWLine():  #for climbing the ramp, aligns us with the white line, late in teleop gyro heading might have siginifcant error so its good to use the line following
+    print(leftLineSensor.value()) # getting an initial reading
+    print(rightLineSensor.value())
+    #want to turn the correct way to the line, so we don't spin in a circle trying to find it
+    #the line is always in the 180 degree heading or 0 degree heading, so we can use that to check what way to turn
+    if (gyro.heading() >= 90 or gyro.heading() <= 270):
+        direction =  round((gyro.heading() - 180) / abs((gyro.heading() - 180))) #-1 is ccw, 1 is cw
+        wantedHeading = 180
+    else:
+        direction = round((gyro.heading()) / abs((gyro.heading())))
+        wantedHeading = 0
+    
+    wait(250) #delay for the robot to calculate the above lines
+    while leftLineSensor.value() > 1500 and rightLineSensor.value() > 1500: #the value of a white line is <1500
+        turnToHeading(wantedHeading, direction)
+        
+def driveTillTopOfRamp():
+    currHeading = gyro.heading()
+    while farLineSensor.value() > 1500:
+        driveWGyro(currHeading, RAMP_SPEED)
+    #after first while loop reaches the start of the thicker white line at top of ramp, want to drive past it
+    while farLineSensor.value() <= 1500:
+        driveWGyro(currHeading, RAMP_SPEED) #continues driving until robot is past upper white tape
+    breakTopRamp()
+    
 
         
 # def auton_3ballcollect():
@@ -115,14 +182,7 @@ def DetectObject():
     return False
     
 while True:
-    frontLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
-    frontRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
-    backLeft_motor.set_velocity(2* (controller.axis3.position()+controller.axis1.position()), RPM)
-    backRight_motor.set_velocity(2* (controller.axis3.position()-controller.axis1.position()), RPM)
-    frontLeft_motor.spin(FORWARD)
-    frontRight_motor.spin(FORWARD)
-    backLeft_motor.spin(FORWARD)
-    backRight_motor.spin(FORWARD)
+    teleopDrive()
 
 # Check for E-Stop
     if(controller.buttonDown.pressing() and not_E_stopped):
@@ -226,9 +286,4 @@ while True:
         hood_motor.spin(FORWARD, 10, RPM)
     elif controller.buttonR2.pressing():
         hood_motor.spin(REVERSE, 10, RPM)
-        
-
-
-
-
-        
+     
