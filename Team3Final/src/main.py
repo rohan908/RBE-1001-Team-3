@@ -19,6 +19,7 @@ DEGREES_PER_INCH = 28.6
 
 K_P_DRIVE = 2.5
 KP_STRAIGHT = 0.1 #PID controller
+KP_ALIGN = 0.1
 K_P_TURN = .04
 PI = 3.14159      
 
@@ -181,7 +182,7 @@ def AlignWithTarget():
     if (DetectObject()):
         while camera.largest_object().centerX < 150 or camera.largest_object().centerX > 160:
             objects = camera.take_snapshot(SIG_GREENYELLOW)
-            drivePID(0, KP_STRAIGHT * abs(camera.largest_object().centerX - 155) * -1)
+            drivePID(0, KP_ALIGN * abs(camera.largest_object().centerX - 155) * -1)
 
 while True:
     controller.screen.print(str(robot_state))
