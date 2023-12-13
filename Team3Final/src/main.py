@@ -19,7 +19,7 @@ DEGREES_PER_INCH = 28.6
 
 K_P_DRIVE = 2.5
 KP_STRAIGHT = 0.1 #PID controller
-KP_ALIGN = 0.1
+KP_ALIGN = 0.5
 K_P_TURN = .04
 PI = 3.14159      
 
@@ -36,7 +36,7 @@ SHOOTER_STOP = 0
 SHOOTER_RUN = 1
 
 shooter_state = SHOOTER_STOP
-robot_state = ROBOT_CONTROLLED
+robot_state = ROBOT_TURN_TO_COLLECT
 
 next_shooter_state = SHOOTER_STOP
 next_robot_state = ROBOT_TURN_TO_COLLECT
@@ -58,7 +58,7 @@ leftLineSensor = Line(brain.three_wire_port.c)
 rightLineSensor = Line(brain.three_wire_port.d)
 # farLineSensor = Line(brain.three_wire_port.d)
 
-SIG_GREENYELLOW = Signature(1, -5213, 353, -2430, -4713, -3865, -4289, 2.2, 0)
+SIG_GREENYELLOW = Signature(3, -5167, 269, -2449, -4625, -3895, -4260, 1.200, 0)
 camera = Vision(Ports.PORT13, 50, SIG_GREENYELLOW)
 
 
@@ -172,17 +172,35 @@ def drivePID(speed, error):
     backRight_motor.spin(FORWARD)
 
 def DetectObject():
-    objects = camera.take_snapshot(SIG_GREENYELLOW)
+    objects = camera.take_snapshot(SIG_GREENYELLOW, 1)
     if (objects):
         print(" x: ", camera.largest_object().centerX, "y: ", camera.largest_object().centerY, "width", camera.largest_object().width)
+        return True
 
     return False
     
 def AlignWithTarget():
     if (DetectObject()):
+        print("found object")
         while camera.largest_object().centerX < 150 or camera.largest_object().centerX > 160:
             objects = camera.take_snapshot(SIG_GREENYELLOW)
-            drivePID(0, KP_ALIGN * abs(camera.largest_object().centerX - 155) * -1)
+            print(" x: ", camera.largest_object().centerX, "y: ", camera.largest_object().centerY, "width", camera.largest_object().width)
+            drivePID(0, KP_ALIGN * (camera.largest_object().centerX - 155) * -1)
+    else:
+        print("no object")
+
+# turnUntil White : None -> None
+# RESULT : The robot will keep turning counter clockwise until both line trackers have reached a white line
+def turnUntilWhite():
+    print(leftLineSensor.value()) # getting an initial reading
+    print(rightLineSensor.value())
+    wait(250) #delay for the robot to calculate the above lines
+    while leftLineSensor.value() > 2000 and rightLineSensor.value() > 2000: #the value of a white line is <1500
+        frontLeft_motor.set_velocity(25, RPM) 
+        frontRight_motor.set_velocity(25, RPM)
+        backLeft_motor.set_velocity(25, RPM) 
+        backRight_motor.set_velocity(25, RPM) 
+
 
 while True:
     controller.screen.print(str(robot_state))
@@ -303,6 +321,8 @@ while True:
         intake_motor.stop(BRAKE)
     if controller.buttonX.pressing():
         AlignWithTarget()
+    if controller.buttonY.pressing():
+        turnUntilWhite()
 
 
     teleopDrive()
