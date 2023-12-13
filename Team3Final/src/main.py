@@ -15,9 +15,11 @@ from math import *
 WHEEL_DIAMETER = 4.0
 DRIVE_SPEED_RATIO = 0.6
 WHEEL_TRACK = 12.0 
+DEGREES_PER_INCH = 28.6
 
 K_P_DRIVE = 2.5
-K_P_TURN = .1
+KP_STRAIGHT = 0.1 #PID controller
+K_P_TURN = .04
 PI = 3.14159      
 
 #states
@@ -26,12 +28,14 @@ ROBOT_TURN_TO_COLLECT = 1
 ROBOT_COLLECT = 2
 ROBOT_MOVE_TO_GOAL = 3
 ROBOT_ALIGN = 4
+ROBOT_PARK = 5
+ROBOT_CONTROLLED = 6
 
 SHOOTER_STOP = 0
 SHOOTER_RUN = 1
 
 shooter_state = SHOOTER_STOP
-robot_state = ROBOT_TURN_TO_COLLECT
+robot_state = ROBOT_CONTROLLED
 
 next_shooter_state = SHOOTER_STOP
 next_robot_state = ROBOT_TURN_TO_COLLECT
@@ -41,21 +45,23 @@ not_E_stopped = True
 brain = Brain()
 controller = Controller()
 
-gyro = Inertial(Ports.PORT6)
+gyro = Inertial(Ports.PORT4)
 gyro.reset_heading()
 gyro.calibrate()
+while gyro.is_calibrating():
+    continue
 
-sonic = Sonar(brain.three_wire_port.a)
+sonic = Sonar(brain.three_wire_port.e)
 
-leftLineSensor = Line(brain.three_wire_port.b)
-rightLineSensor = Line(brain.three_wire_port.c)
-farLineSensor = Line(brain.three_wire_port.d)
+leftLineSensor = Line(brain.three_wire_port.c)
+rightLineSensor = Line(brain.three_wire_port.d)
+# farLineSensor = Line(brain.three_wire_port.d)
 
-SIG_RED_BALL = Signature(1, 8945, 11595, 10270, -1391, -471, -930, 2.500, 0)
-SIG_BLUE_BALL = Signature(2, -2259, -1025, -1642, 4097, 9345, 6722, 3.000, 0)
-indexer_camera = Vision(Ports.PORT13, 50, SIG_RED_BALL)
+SIG_GREENYELLOW = Signature(1, -5213, 353, -2430, -4713, -3865, -4289, 2.2, 0)
+camera = Vision(Ports.PORT13, 50, SIG_GREENYELLOW)
 
-SET_TURN_SPEED = 0
+
+SET_TURN_SPEED = 50
 RAMP_SPEED = 0
 #Instantiating motors
 frontLeft_motor = Motor(Ports.PORT20, 18_1, True)
@@ -72,9 +78,9 @@ def getHeadingError(targetHeading):
     #say the heading is 359 degrees and we want to go to 0 degrees, the real difference is 1 degree, but a subtraction results in -359 degrees
     # subtracting that/adding to 360 gives us the true error and corrects for the 360 degree to 0 degree jump
     if (headingError > 180):
-        headingError = 360 - headingError
+        headingError = -1 * (360 - headingError)
     elif (headingError < -180):
-        headingError = 360 + headingError
+        headingError = -1 * (360 + headingError)
     return headingError
 
 def leftSideDrive(speedInRPM): #combines the two left side motors into one drive function
@@ -100,100 +106,88 @@ def breakTopRamp():
     backRight_motor.stop(HOLD)
 
 def driveWGyro(wantedHeading, driveSpeed):
-    direction = -K_P_DRIVE*getHeadingError(wantedHeading)
+    direction = K_P_DRIVE*getHeadingError(wantedHeading)
     leftSideDrive(driveSpeed - direction) #direction is a K_P modified value
     rightSideDrive(driveSpeed + direction)
 
 def deadReckonDrive(distInch, speed):
-        frontLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)   #direction is a K_P modified value
-        backLeft_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)   #direction is a K_P modified value
-        frontRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)
-        backRight_motor.spin_to_position(distInch / (PI*WHEEL_DIAMETER), TURNS, speed)
+        frontLeft_motor.spin_for(FORWARD,distInch*DEGREES_PER_INCH*DRIVE_SPEED_RATIO,DEGREES,speed,RPM,False)   #direction is a K_P modified value
+        backLeft_motor.spin_for(FORWARD,distInch*DEGREES_PER_INCH*DRIVE_SPEED_RATIO,DEGREES,speed,RPM,False)  #direction is a K_P modified value
+        frontRight_motor.spin_for(FORWARD,distInch*DEGREES_PER_INCH*DRIVE_SPEED_RATIO,DEGREES,speed,RPM,False)
+        backRight_motor.spin_for(FORWARD,distInch*DEGREES_PER_INCH*DRIVE_SPEED_RATIO,DEGREES,speed,RPM,True)
 
 def teleopDrive():
-    leftSideDrive(2* (controller.axis3.position()+controller.axis1.position())) #direction is a K_P modified value
+    leftSideDrive(2* (controller.axis3.position()+controller.axis1.position()))
     rightSideDrive(2* (controller.axis3.position()-controller.axis1.position()))
 
 def driveWSonic(distIn, speed):
-    sonicIntial = sonic.distance(INCHES)
-    print("here")
-    print(sonic.distance(INCHES))
+    wait(250)
+    sonicIntial = sonic.distance(DistanceUnits.IN)
+    wait(250)
+    print("sonic initial: " + str(sonicIntial))
     initialHeading = gyro.heading()
-    while(abs(sonic.distance(INCHES) - sonicIntial) < distIn):
+    while(sonic.distance(DistanceUnits.IN) < distIn or sonic.distance(DistanceUnits.IN) < distIn > 500):
+        print("here " + str(sonic.distance(DistanceUnits.IN)))
         driveWGyro(initialHeading, speed)
+    print("sonic final: " + str(sonic.distance(DistanceUnits.IN)))
+    driveStop()
 
-def turnToHeading(desiredHeading, direction):
+def turnToHeading(desiredHeading):
     #direction is 1 for clockwise rotation
     #direction is -1 for ccw
     #turning to the right is positive degrees for robotTurnInDegrees!
     headingError = getHeadingError(desiredHeading)
-    while (abs(headingError) > 0.3): #while the error is greater than 0.3 degrees then continue to correct using proportional correction
+    print("heading error: " + str(headingError))
+    while (abs(headingError) > 0.75): #while the error is greater than 0.3 degrees then continue to correct using proportional correction
         headingError = getHeadingError(desiredHeading) #if the robot is turned to the right of the desired heading, -K_P returns a negative value
-        leftSideDrive(SET_TURN_SPEED * K_P_TURN * headingError * direction)
-        rightSideDrive(-1 * SET_TURN_SPEED * K_P_TURN * headingError * direction)
+        leftSideDrive(-1 * SET_TURN_SPEED * K_P_TURN * headingError)
+        rightSideDrive(SET_TURN_SPEED * K_P_TURN * headingError)
+        #print("heading error: " + str(headingError))
+    print("done Turn")
     driveStop()
     #stops to reset velocity values 
 
-def turnDegrees(robotTurnInDegrees, direction):
+def turnDegrees(robotTurnInDegrees):
+    gyro.calibrate()
+    while gyro.is_calibrating():
+        continue
     #turns the robot some amount of degrees
     #direction is 1 for clockwise rotation
     #direction is -1 for ccw
     desiredHeading = robotTurnInDegrees + gyro.heading() #wanted new heading
-    turnToHeading(desiredHeading, direction)
+    turnToHeading(desiredHeading)
 
-def alignWLine():  #for climbing the ramp, aligns us with the white line, late in teleop gyro heading might have siginifcant error so its good to use the line following
-    print(leftLineSensor.value()) # getting an initial reading
-    print(rightLineSensor.value())
-    #want to turn the correct way to the line, so we don't spin in a circle trying to find it
-    #the line is always in the 180 degree heading or 0 degree heading, so we can use that to check what way to turn
-    if (gyro.heading() >= 90 or gyro.heading() <= 270):
-        direction =  round((gyro.heading() - 180) / abs((gyro.heading() - 180))) #-1 is ccw, 1 is cw
-        wantedHeading = 180
-    else:
-        direction = round((gyro.heading()) / abs((gyro.heading())))
-        wantedHeading = 0
-    
-    wait(250) #delay for the robot to calculate the above lines
-    while leftLineSensor.value() > 1500 and rightLineSensor.value() > 1500: #the value of a white line is <1500
-        turnToHeading(wantedHeading, direction)
-        
-def driveTillTopOfRamp():
-    currHeading = gyro.heading()
-    while farLineSensor.value() > 1500:
-        driveWGyro(currHeading, RAMP_SPEED)
-    #after first while loop reaches the start of the thicker white line at top of ramp, want to drive past it
-    while farLineSensor.value() <= 1500:
-        driveWGyro(currHeading, RAMP_SPEED) #continues driving until robot is past upper white tape
-    breakTopRamp()
-    
-
-        
-# def auton_3ballcollect():
-#     #turn on intake
-#     for i in range(5):
-#         while rangeFinder.distance(DistanceUnits.IN):
-            
-#         #move fowards to collect the ball
-            #while robot is < x inches from the back wall
-                #move forward at the current heading
-        #back up
-            #while robot is > x inches from the back wall
-                #move backwards at the current heading
-        #wait
-            #wait for 2 seconds
+# drivePID : Integer or Float, Integer or Float -> None
+# RESULT : The robot will set the velocity at the given speed, with adjustments by the error parameter
+#          A positive error will turn the robot counter-clockwise, and a negative error will turn the robot clockwise
+def drivePID(speed, error):
+    frontLeft_motor.set_velocity(speed + error, RPM)
+    frontRight_motor.set_velocity(speed + error, RPM)
+    backLeft_motor.set_velocity(speed + error, RPM)
+    backRight_motor.set_velocity(speed + error, RPM)
+    frontLeft_motor.spin(FORWARD)
+    frontRight_motor.spin(FORWARD)
+    backLeft_motor.spin(FORWARD)
+    backRight_motor.spin(FORWARD)
 
 def DetectObject():
-    objects = indexer_camera.take_snapshot(SIG_RED_BALL)
+    objects = camera.take_snapshot(SIG_GREENYELLOW)
     if (objects):
-        print(" x: ", indexer_camera.largest_object().centerX, "y: ", indexer_camera.largest_object().centerY, "width", indexer_camera.largest_object().width)
-        if (indexer_camera.largest_object().centerX < 250):
-            return True
+        print(" x: ", camera.largest_object().centerX, "y: ", camera.largest_object().centerY, "width", camera.largest_object().width)
+
     return False
     
-while True:
-    print(robot_state)
+def AlignWithTarget():
+    if (DetectObject()):
+        while camera.largest_object().centerX < 150 or camera.largest_object().centerX > 160:
+            objects = camera.take_snapshot(SIG_GREENYELLOW)
+            drivePID(0, KP_STRAIGHT * abs(camera.largest_object().centerX - 155) * -1)
 
-# Check for E-Stop
+while True:
+    controller.screen.print(str(robot_state))
+    
+
+# # Check for E-Stop
     if(controller.buttonDown.pressing() and not_E_stopped):
         not_E_stopped = False
         next_shooter_state = shooter_state
@@ -204,26 +198,27 @@ while True:
         brain.screen.clear_screen()
         brain.screen.print_at('Emergency Stop', x = 50, y = 50)
 
-    if(controller.buttonUp.pressing()):
-        shooter_state = next_shooter_state
-        robot_state = next_robot_state
-        not_E_stopped = True
-        print('Proceed')
-        brain.screen.clear_screen()
-        brain.screen.print_at('Proceed' , x = 50, y = 50)
+    if(controller.buttonY.pressing()):
+        shooter_state = SHOOTER_STOP
+        if(robot_state != ROBOT_CONTROLLED):
+            robot_state = ROBOT_CONTROLLED
+        
 
 #Shooter State Machine
     if(shooter_state == SHOOTER_STOP):
         indexer_motor.stop(BRAKE)
         shooter_motor.stop(COAST)
-        #print("Shooter Stopped")
+        intake_motor.stop(COAST)
+        print("Shooter Stopped")
 
     if(shooter_state == SHOOTER_RUN):
+        intake_motor.spin(FORWARD, 200)
         shooter_motor.spin(FORWARD, 200, RPM)
-        for i in range(6):
-            indexer_motor.spin_for(FORWARD, 165, DEGREES)
-            while(shooter_motor.velocity() < 175 ):
+        for i in range(15):
+            while(shooter_motor.velocity() < 170 ):
                 wait(20)
+            indexer_motor.spin_for(FORWARD, 165, DEGREES)
+        robot_state = ROBOT_PARK
         shooter_state = SHOOTER_STOP
 
 #Robot State Machine
@@ -234,68 +229,108 @@ while True:
         backRight_motor.stop(BRAKE)
 
     if(robot_state == ROBOT_TURN_TO_COLLECT):
-        currHeading = gyro.heading()
-        while(True):
-            driveWGyro(currHeading, 100)
-        # turnDegrees(90, -1)
+        driveWSonic(10, 50)
+        turnDegrees(-90)
         robot_state = ROBOT_COLLECT
 
-    # if(robot_state == ROBOT_COLLECT):
-    #     #code for collecting 5 balls
-    #     robot_state = ROBOT_MOVE_TO_GOAL
-
-    # if(robot_state == ROBOT_MOVE_TO_GOAL):
-    #     #code for moving towards the blue target
-    #     robot_state = ROBOT_ALIGN
-
-    # if(robot_state == ROBOT_ALIGN):
-    #     #code for aligning the robot with the blue target
-    #     robot_state = ROBOT_STOP
-    #     shooter_state = SHOOTER_RUN
-
-
-    brain.screen.print_at(shooter_motor.velocity(RPM), x=100, y=200)
-    #Indexer Pseudocode
-    #If the robot detects a ball, move indexer by x amount, stops otherwise.
-    # red_objects = indexer_camera.take_snapshot(SIG_RED_BALL)
-    # blue_objects = indexer_camera.take_snapshot(SIG_BLUE_BALL)
-
-    # if(DetectObject()):
-    #      print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width)
-    #      wait(200)
-    #      indexer_motor.spin_for(FORWARD, 150, DEGREES)
-    # else:
-    #     indexer_motor.spin(FORWARD, 0, RPM)
-
-    # if (red_objects or blue_objects):
-    #     if(indexer_camera.largest_object().height * indexer_camera.largest_object().width > 100):
-    #         print("here")
-    #         print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width) #If the robot detects a ball):
-    #         brain.screen.print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width)
-    #         indexer_motor.spin_for(FORWARD, 150, DEGREES)
-    #     else: 
-    #         indexer_motor.spin(FORWARD, 0, RPM)
-    # else:
-    #     indexer_motor.spin(FORWARD, 0, RPM)
-    
-    if controller.buttonL2.pressing():
-        intake_motor.spin(FORWARD, 200, RPM)
-        indexer_motor.spin(REVERSE, 50, RPM)
-    elif controller.buttonL1.pressing():
+    if(robot_state == ROBOT_COLLECT):
         intake_motor.spin(REVERSE, 200, RPM)
-        #indexer_motor.spin(FORWARD, 200, RPM)
-    if controller.buttonA.pressing():
-        shooter_motor.spin(FORWARD, 200, RPM)
-    elif controller.buttonB.pressing():
-        intake_motor.spin(FORWARD, 0, RPM)
-        indexer_motor.spin(FORWARD, 0, RPM)
-        shooter_motor.spin(FORWARD, 0, RPM)
-    if controller.buttonX.pressing():
-        hood_motor.spin(FORWARD, 0, RPM)
-    if controller.buttonY.pressing():
-        indexer_motor.spin_for(FORWARD, 165, DEGREES)
+        for i in range(3):
+            deadReckonDrive(25, 50)
+            wait(1000)
+            deadReckonDrive(-25, 50)
+            wait(1000)
+            if (i != 2):
+                indexer_motor.spin_for(FORWARD, 150, DEGREES)
+            else:
+                indexer_motor.spin_for(FORWARD, 75, DEGREES)
+        for i in range(2):
+            deadReckonDrive(25, 50)
+            wait(1000)
+            deadReckonDrive(-25, 50)
+            wait(1000)
+        robot_state = ROBOT_MOVE_TO_GOAL
+
+    if(robot_state == ROBOT_MOVE_TO_GOAL):
+    #     #code for moving towards the blue target
+        intake_motor.spin(FORWARD, 0)
+        turnDegrees(90)
+        deadReckonDrive(-30, 50)
+        deadReckonDrive(30, 50)
+        print("start sonic")
+        driveWSonic(40, 50)
+        deadReckonDrive(35, 50)
+        print("end sonic")
+        turnDegrees(90)
+        robot_state = ROBOT_ALIGN
+
+    if(robot_state == ROBOT_ALIGN):
+    #code for aligning the robot with the blue target
+        driveWSonic(21.5, 50)
+        robot_state = ROBOT_STOP
+        shooter_state = SHOOTER_RUN
+
+    if(robot_state == ROBOT_PARK):
+        intake_motor.spin(FORWARD, 0)
+        turnDegrees(150)
+        deadReckonDrive(-75, 50)
+        turnDegrees(-60)
+        deadReckonDrive(-65, 100)
+        robot_state = ROBOT_CONTROLLED
+    
+    if(robot_state == ROBOT_CONTROLLED):
+        break
+
+while True:
+    brain.screen.print_at("velocity" + str(shooter_motor.velocity(RPM)), x=100, y=200)
+    brain.screen.print_at("current" + str(shooter_motor.current()), x=100, y=150)
+    if controller.buttonL2.pressing():
+        intake_motor.set_velocity(200, RPM)
+        intake_motor.spin(FORWARD)
+    elif controller.buttonL1.pressing():
+        intake_motor.set_velocity(200, RPM)
+        intake_motor.spin(REVERSE)
     if controller.buttonR1.pressing():
-        hood_motor.spin(FORWARD, 10, RPM)
+        indexer_motor.spin_for(FORWARD, 165, DEGREES)
     elif controller.buttonR2.pressing():
-        hood_motor.spin(REVERSE, 10, RPM)
+        indexer_motor.spin_for(REVERSE, 165, DEGREES)
+    if controller.buttonA.pressing():
+        shooter_motor.set_velocity(200, RPM)
+        shooter_motor.spin(FORWARD)
+    if controller.buttonB.pressing():
+        shooter_motor.stop(COAST)
+        intake_motor.stop(BRAKE)
+    if controller.buttonX.pressing():
+        AlignWithTarget()
+
+
+    teleopDrive()
+
+
+
+
+#     brain.screen.print_at(shooter_motor.velocity(RPM), x=100, y=200)
+#     #Indexer Pseudocode
+#     #If the robot detects a ball, move indexer by x amount, stops otherwise.
+#     # red_objects = indexer_camera.take_snapshot(SIG_RED_BALL)
+#     # blue_objects = indexer_camera.take_snapshot(SIG_BLUE_BALL)
+
+#     # if(DetectObject()):
+#     #      print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width)
+#     #      wait(200)
+#     #      indexer_motor.spin_for(FORWARD, 150, DEGREES)
+#     # else:
+#     #     indexer_motor.spin(FORWARD, 0, RPM)
+
+#     # if (red_objects or blue_objects):
+#     #     if(indexer_camera.largest_object().height * indexer_camera.largest_object().width > 100):
+#     #         print("here")
+#     #         print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width) #If the robot detects a ball):
+#     #         brain.screen.print('height:', indexer_camera.largest_object().height, '   width:',  indexer_camera.largest_object().width)
+#     #         indexer_motor.spin_for(FORWARD, 150, DEGREES)
+#     #     else: 
+#     #         indexer_motor.spin(FORWARD, 0, RPM)
+#     # else:
+#     #     indexer_motor.spin(FORWARD, 0, RPM)
+    
      
