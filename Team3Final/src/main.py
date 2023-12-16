@@ -36,7 +36,7 @@ SHOOTER_STOP = 0
 SHOOTER_RUN = 1
 
 shooter_state = SHOOTER_STOP
-robot_state = ROBOT_TURN_TO_COLLECT
+robot_state = ROBOT_CONTROLLED
 
 next_shooter_state = SHOOTER_STOP
 next_robot_state = ROBOT_TURN_TO_COLLECT
@@ -237,8 +237,8 @@ while True:
             while(shooter_motor.velocity() < 170 ):
                 wait(20)
             indexer_motor.spin_for(FORWARD, 165, DEGREES)
-        robot_state = ROBOT_PARK
         shooter_state = SHOOTER_STOP
+        robot_state = ROBOT_CONTROLLED
 
 #Robot State Machine
     if(robot_state == ROBOT_STOP):
@@ -290,11 +290,11 @@ while True:
         shooter_state = SHOOTER_RUN
 
     if(robot_state == ROBOT_PARK):
-        intake_motor.spin(FORWARD, 0)
-        turnDegrees(150)
-        deadReckonDrive(-75, 50)
-        turnDegrees(-60)
-        deadReckonDrive(-65, 100)
+        # intake_motor.spin(FORWARD, 0)
+        # turnDegrees(150)
+        # deadReckonDrive(-75, 50)
+        # turnDegrees(-60)
+        # deadReckonDrive(-65, 100)
         robot_state = ROBOT_CONTROLLED
     
     if(robot_state == ROBOT_CONTROLLED):
@@ -321,8 +321,8 @@ while True:
         intake_motor.stop(BRAKE)
     if controller.buttonX.pressing():
         AlignWithTarget()
-    if controller.buttonY.pressing():
-        turnUntilWhite()
+    # if controller.buttonY.pressing():
+    #     turnUntilWhite()
 
 
     teleopDrive()
